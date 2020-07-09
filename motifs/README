@@ -222,12 +222,63 @@ variation of this earth motif), could be:
 +++ motifs/elements/earth-s/themes/big.txt
 BEGIN lead
     instrument = brass
+    mood = +danger              # favor moods with more danger; see moods below
 END
 
 BEGIN back
     instrument = ensemble
+    mood = +anxiety -danger     # favor moods with more speed and less danger
 END
 ---
 
 A theme may only specify a category of instruments; the engine's state will determine which specific
 instrument to use, based on something called 'mood'. More on moods later!
+
+== Backend
+
+Music can be played into one (if any) of a selection of backends. Each backend is
+a way for NetHack to play the music it generates ('composes'). Think of backend
+code like a maestro in an orchestra; the instrumentalists in said orchestra would
+be the actual backend itself (your speaker, or a MIDI synthesizer before your
+speaker, or the network, etc), and .
+
+Backends are grouped into types (midi, pcm), and usually also support a 'target' argument
+(e.g. speaker-default, udp-socket, udp-server, pulseaudio). They, and their argument,
+an be specified from the NetHack option 'music_backend':
+
++++ example .nethackrc
+OPTIONS=music_backend:midi/timidity@pulseaudio
+OPTIONS=music_backend:pcm/pc-speaker-msdos
+OPTIONS=music_backend:midi/opl-synth@udp-socket
+OPTIONS=music_backend:midi/microsoft-gs         # note that Microsoft's wavetable synth only supports one 'target' - the speaker
+OPTIONS=music_backend:pcm/libopenmpt            # supporting realtime libopenmpt playback + custom instruments is hypothetical, deferred and unimportant
+OPTIONS=music_backend:terminal/beep             # use basic ANSI beeps with varying pitches. try experimenting with basic instrum. patterns and envelopes!
+# ...
+---
+
+Other options that may be of implementative interest are 'music_channels' ('mono', 'stereo', or
+a number), 'music_volume', 'music_enable' etc. It would probably be opt-in for terminal clients,
+and conversely opt-out for graphical clients.
+
+== Mood
+
+A mood is, putting it short, a 'way' to play music. Happier moods will select happier
+instruments, and may even transpose played music one octave up if supported by the
+playing motif's theme. They usually also have associated themes of their own. Some
+themes will favor certain elements of a mood. The theme that most fits a mood will
+be selected. Moods do not drive motif and motif variation selection, though; this
+depends a lot more on specific context, which moods only generalize
+
+Moods are a major part of the dynamic music engine's state. It is not defined precisely
+here; its precise shape and details are left to the implementor's discretion. A good
+example would be an unsigned number vector/array, with elements such as:
+
+    a) hope
+    b) anxiety/speed
+    c) danger
+
+etc. Taking damage can increase anxiety and decrease hope, whereas searching can decrease
+anxiety, but healing (from a potion or nurse), praying or successfully slaying an enemy can
+increase hope. Thus, the mood is basically a distilled synthesis of the ingame context,
+with any details boiled out, that serves to drive the thematic mood and feel of the whole game
+as a musical opera.
