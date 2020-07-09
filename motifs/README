@@ -1,0 +1,233 @@
+== Introduction
+
+NetHack will, one day, implement dynamic music for platforms that
+support it, with multiple playback backends, such as MIDI, ALSA,
+et cetera. During gameplay, it will dynamically 'compose' a sequence
+of notes to be played, based on the status of the game, on any
+visible events that may occur, and on the current dungeon level.
+
+For this end, many concepts will have a *motif*, a small piece of music
+meant to represent some concept. The music engine will link two motifs
+to form an idea (such as linking the motifs of dungeon and progress
+to represent going down a level). Transitions will generally be smooth,
+and can be soft (waiting until the end of an idea pair before the next
+one) or hard (seguing straight into the next idea whilst trying to fit
+harmonic clashes as much as possible).
+
+== Motifs and Pieces
+
+Each motif is split into two parts - the lead (or melody) and the back
+(or harmony) -, for extra flexibility in the engine. The harmony will
+tend to have softer transitions, and its choice of instrument is separate
+from the lead's.
+
+In this folder lies a categorized file tree of motifs, grouped into
+kinds of concepts, then into the concepts themselves. A concept can
+have multiple motifs, and variations thereof. For example, the motif
+of the earth element can be in the major ('positive') or minor
+('negative') scale, as well as represent lighter ideas ('soil') as
+well as heavier ideas ('rock'). Motif pieces will be stored in the 
+'pieces' folder, alongside MIDI previews. For example:
+
+    ...-+-> motifs                      # root 'motifs' tree
+        |
+        '---+-> elements                # category
+            |
+            +---+-> earth-s             # concept ('earth') with variation suffix ('s' for 'soil')
+            |   |
+            |   |
+            |   +-----* lead
+            |   +-----* base
+            |   |
+            |   +---+-> previews        # MIDI previews (one for each theme, too, though not exactly necessary)
+            |   |   |
+            |   |   +-----* soil-big.mid    
+            |   |   ''-----* soil-small.mid
+            |   |
+            |   '---+-> themes          # more on 'themes' later in this document!
+            |       |
+            |       +-----* big.txt
+            |       '-----* small.txt
+            |
+            '---+-> earth-r             # 'r' is for 'rock'
+                |
+                +-----* lead
+                +-----* base
+                |
+                +---+-> previews
+                |   |
+                |   '-----* rock-normal.mid
+                |
+                '---+-> themes          # more on 'themes' later in this document!
+                    |
+                    +-----* normal.txt  # earth-r may have only one theme, hence only one preview too
+
+Every folder may have a suffix, an hyphen followed by a single lowercase alphanumeric
+character, that "encodes" the variation of the motif whose files lie in it.  Motifs
+that don't have multiple variations of themselves can omit this suffix. However,
+lead and base pieces still MUST be named accordingly.
+
+Note that the varaiatio does not mean that a piece depends on the physical, literal
+composition or appearance of any 'subject of attention' in the musical engine; here
+for instance, just say the variation 'rock' means gravity, i.e. the weight of the
+contextual situation.
+
+Please note that the motifs in this folder are also available in a MIDI format
+for preview, although this implementation is envisioned reading simple ASCII files
+that contain a list of commands with note information. The preview helps ensure
+the music fits the concept it is assigned to (somehow), as well as assisting
+overall quality control. It is encouraged that a piece of music in any format (Ogg,
+or MP3, or MIDI, or hell, even Impulse Tracker) is included with each piece, for
+this reason. It is not strictly necessary, but it will help a lot, especially in this
+early stage of proposal of the musical aspect of the game.
+
+Those files would be in a format like:
+
+    BEGIN elements/earth/soil major begin:c_5 end:d_5
+      # blank lines purely aesthetic, and comments start with '#'
+    PLAY C.5 3 # C.5 = natural C, octave 5; 3 beats
+    PLAY As4 1 # A sharp 4; 1 beat
+    PLAY G.5 1
+    PLAY C.5 1
+    PLAY Ds5 2
+    PLAY F.5 1
+    PLAY D.5 1
+    
+    END
+
+Notice how duration information mostly stores the relative length of a note
+to an unit - a 'beat', which is an unit of note length *in the file*. That is,
+all notes are at least 1 beat in length.
+
+By default, one beat is equal to one 'instant', which is also an unit of note
+length, but that is used by the music engine, rather than the file itself. No
+beat is larger than an instant, ever. This is important, as for instance, one
+may want to configure the NetHack music engine to play faster and faster as the
+player loses more hit points, to signify danger and anxiety. If beats could be
+larger than instants, it would be easily possible to arrange notes in such a
+way that they would play in a very odd speed; the lead and back tracks would be
+misaligned, and the result would sound very janky.
+
+If one requires more resolution, though, it is possible to 'halve' the size of a
+beat, to fit multiple beats into one instant, by using the 'res' option in the BEGIN
+command. It defaults to 1, which again, means 1 beat = 1 instant. Incrementing this
+number will halve the size of a beat with relation to an instant, so there is an
+exponential relationship,
+  B = I / 2^r,
+where B is the beat size, I is the instant size, and r is the value of the 'res' option.
+
+For example, the piece above would be equivalent to this:
+
+    BEGIN elements/earth/soil major lead begin:c_5 end:d_5 res:2
+
+    PLAY C.5 6
+    PLAY As4 2
+    PLAY G.5 2
+    PLAY C.5 2
+    PLAY Ds5 4
+    PLAY F.5 2
+    PLAY D.5 2
+    
+    END
+
+Note the res option being set to 2, and the note durations being doubled accordingly.
+They could also be arranged in a way that would not be possible if res were set to 1
+(as is the default):
+
+    BEGIN elements/earth/soil major lead begin:c_5 end:d_5 res:2
+
+    PLAY C.5 5
+    PLAY As4 3
+    PLAY G.5 2
+    PLAY C.5 2
+    PLAY Ds5 4
+    PLAY F.5 2
+    PLAY D.5 2
+    
+    END
+
+Note durations are not arbitrarily fractionable.
+
+A more appeasing solution may be to ditch the 'res' option altogether, and instead allow
+an opt-in notation for fractionable durations, where the denominator is actually also
+exponential:
+
+    BEGIN elements/earth/soil major lead begin:c_5 end:d_5
+
+    PLAY C.5 5/2
+    PLAY As4 3/2
+    PLAY G.5 1
+    PLAY C.5 1
+    PLAY Ds5 2
+    PLAY F.5 1
+    PLAY D.5 1
+    
+    END
+
+'5/4' would actually be equivalent to 5 * B/8, rather than 5 * B/4, since the denominator
+is exponential; it is set to 4, and 2 ^ 4 = 8. Again, this is to avoid jankiness. You
+can't have fractional beats that aren't powers of 2.
+
+If aligning multiple pieces is important (such as a lead and a back), LABEL commands can
+help. The special note duration R (for 'remainder') means that this note will play until
+the end of the label. The labels in a lead and back *must* be perfectly aligned with each
+other, and this will be linted at build time to ensure that NetHack is not released with
+faulty music.
+
++++ pieces/elements/earth/soil-jl.txt
+    BEGIN elements/earth/soil lead begin:c_5 end:d_5
+
+    LABEL part1
+    PLAY C.5 5/2
+    PLAY As4 3/2
+    PLAY G.5 1
+    PLAY C.5 1
+    
+    LABEL part2
+    PLAY Ds5 2
+    PLAY F.5 1
+    PLAY D.5 1
+    
+    END
+---
++++ pieces/elements/earth/soil-jb.txt
+    BEGIN elements/earth/soil back begin:c_5 end:d_5
+
+    LABEL part1
+    PLAY G.3 C.4 G.4 10
+    
+    LABEL part2
+    PLAY G.3 C.4 F.4 2
+    PLAY G.3 D.4 G.4 2
+    
+    END
+---
+
+Note how the notes of both parts are very close together, despite the latter being supposed
+to be played simultaneously. That's because they are, almost always, played with separate
+instruments, and also may have their octaves transposed up to 2 octaves in either direction
+by the engine.
+
+== Themes
+
+The selection of instruments, and other basic playback information, is done using *theme files*.
+An idea is formed by joining two motifs and a *theme*. A theme contains basic overall information;
+it contains both the instrument assigned to the lead and to the back, as well as optionally other
+transforms, such as transposition. A motif may include multiple themes, for multiple occasions.
+
+For example, with the soil motif example above, a theme for big things, important things that happen
+that also happen to be related to the earth (but not too heavy so as to be represented with the 'rock'
+variation of this earth motif), could be:
+
++++ motifs/elements/earth-s/themes/big.txt
+BEGIN lead
+    instrument = brass
+END
+
+BEGIN back
+    instrument = ensemble
+END
+---
+
+A theme may only specify a category of instruments; the engine's state will determine which specific
+instrument to use, based on something called 'mood'. More on moods later!
